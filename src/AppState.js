@@ -24,6 +24,10 @@ export class AppState {
     return {
       imageSizes: '1200x600, 800x400, 400x200',
       selectedBackground: 'white',
+      selectedImageFitMode: 'contain',
+      cropAnchorX: 'center',
+      cropAnchorY: 'bottom',
+      allowUpscale: false,
       selectedVideoResolution: '640x360',
       selectedVideoQuality: 'medium',
       selectedVideoFormat: 'mp4'
@@ -47,6 +51,7 @@ export class AppState {
 
     this.initVideoSettingsListeners();
     this.initBackgroundColorListeners();
+    this.initImageFitModeListeners();
 
     processBtn.addEventListener('click', () => this.startProcessing());
 
@@ -193,6 +198,65 @@ export class AppState {
     });
 
     this.updateCustomPreview();
+  }
+
+  initImageFitModeListeners() {
+    document.querySelectorAll('input[name="imageFitMode"]').forEach(input => {
+      input.addEventListener('change', (e) => {
+        if (!e.currentTarget.checked) return;
+        this.currentSettings.selectedImageFitMode = AppState.normalizeFitMode(e.currentTarget.value);
+        document.querySelectorAll('.image-fit-option').forEach(option => {
+          const radio = option.querySelector('input[name="imageFitMode"]');
+          option.classList.toggle('selected', Boolean(radio?.checked));
+        });
+        this.syncImageFitDependentUI();
+      });
+    });
+
+    document.getElementById('cropAnchorX')?.addEventListener('change', (e) => {
+      this.currentSettings.cropAnchorX = AppState.normalizeAnchorX(e.currentTarget.value);
+    });
+
+    document.getElementById('cropAnchorY')?.addEventListener('change', (e) => {
+      this.currentSettings.cropAnchorY = AppState.normalizeAnchorY(e.currentTarget.value);
+    });
+
+    document.getElementById('allowUpscale')?.addEventListener('change', (e) => {
+      this.currentSettings.allowUpscale = Boolean(e.currentTarget.checked);
+    });
+
+    this.syncImageFitDependentUI();
+  }
+
+  static normalizeFitMode(value) {
+    return ['contain', 'cover', 'stretch'].includes(value) ? value : 'contain';
+  }
+
+  static normalizeAnchorX(value) {
+    return ['left', 'center', 'right'].includes(value) ? value : 'center';
+  }
+
+  static normalizeAnchorY(value) {
+    return ['top', 'center', 'bottom'].includes(value) ? value : 'center';
+  }
+
+  /* Привязка обрезки нужна только режиму "заполнить", апскейл-галочка — только режиму "вписать". */
+  syncImageFitDependentUI() {
+    const mode = this.currentSettings.selectedImageFitMode;
+    document.getElementById('cropAnchorBlock')?.classList.toggle('hidden', mode !== 'cover');
+    document.getElementById('upscaleBlock')?.classList.toggle('hidden', mode !== 'contain');
+  }
+
+  /* Человекочитаемое описание режима — для отчёта в ZIP. */
+  describeImageFitMode() {
+    const s = this.currentSettings;
+    if (s.selectedImageFitMode === 'stretch') return 'Растянуть (пропорции не сохраняются)';
+    if (s.selectedImageFitMode === 'cover') {
+      const y = { top: 'верх', center: 'центр', bottom: 'низ' }[s.cropAnchorY] || 'центр';
+      const x = { left: 'лево', center: 'центр', right: 'право' }[s.cropAnchorX] || 'центр';
+      return `Заполнить с обрезкой (сохранять по вертикали — ${y}, по горизонтали — ${x})`;
+    }
+    return `Вписать целиком (${s.allowUpscale ? 'с увеличением до рамки' : 'без увеличения'})`;
   }
 
   updateCustomPreview() {
@@ -560,6 +624,10 @@ export class AppState {
     const settings = {
       imageSizes: document.getElementById('imageSizes').value,
       selectedBackground: this.currentSettings.selectedBackground,
+      selectedImageFitMode: this.currentSettings.selectedImageFitMode,
+      cropAnchorX: this.currentSettings.cropAnchorX,
+      cropAnchorY: this.currentSettings.cropAnchorY,
+      allowUpscale: this.currentSettings.allowUpscale,
       selectedVideoResolution: this.currentSettings.selectedVideoResolution,
       selectedVideoQuality: this.currentSettings.selectedVideoQuality,
       selectedVideoFormat: this.currentSettings.selectedVideoFormat
@@ -667,6 +735,7 @@ export class AppState {
 
 Настройки обработки:
 - Фон изображений: ${this.currentSettings.selectedBackground}
+- Размещение изображений: ${this.describeImageFitMode()}
 - Разрешение видео: ${this.currentSettings.selectedVideoResolution}
 - Качество видео: ${this.currentSettings.selectedVideoQuality}
 - Формат видео: ${this.currentSettings.selectedVideoFormat}
@@ -990,6 +1059,19 @@ export class AppState {
     document.querySelector('.video-quality-option[data-quality="medium"]').classList.add('selected');
 
     this.setBackgroundSelection('white');
+
+    document.querySelectorAll('input[name="imageFitMode"]').forEach(input => {
+      input.checked = input.value === this.currentSettings.selectedImageFitMode;
+      input.closest('.image-fit-option')?.classList.toggle('selected', input.checked);
+    });
+
+    const anchorX = document.getElementById('cropAnchorX');
+    const anchorY = document.getElementById('cropAnchorY');
+    const upscale = document.getElementById('allowUpscale');
+    if (anchorX) anchorX.value = this.currentSettings.cropAnchorX;
+    if (anchorY) anchorY.value = this.currentSettings.cropAnchorY;
+    if (upscale) upscale.checked = this.currentSettings.allowUpscale;
+    this.syncImageFitDependentUI();
 
     alert('Настройки сброшены!');
     this.updateNamingExample();

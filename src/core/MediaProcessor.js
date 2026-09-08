@@ -5,6 +5,10 @@ import { VideoProcessor } from './VideoProcessor.js';
 import { setFFmpegStatus } from '../ui/status.js';
 
 export class MediaProcessor {
+  static FIT_MODES = ['contain', 'cover', 'stretch'];
+  static ANCHORS_X = ['left', 'center', 'right'];
+  static ANCHORS_Y = ['top', 'center', 'bottom'];
+
   constructor() {
     this.isCancelled = false;
     this.videoProcessor = new VideoProcessor();
@@ -240,6 +244,10 @@ export class MediaProcessor {
       canvas.width = width;
       canvas.height = height;
 
+      // Качественная интерполяция: заметно при сильном уменьшении постеров.
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+
       const backgroundColor = this.getBackgroundColor(settings.selectedBackground);
 
       // подложка
@@ -253,14 +261,59 @@ export class MediaProcessor {
         ctx.fillRect(0, 0, width, height);
       }
 
-      // масштаб с запретом апскейла (как в "нормальных" карточках)
-      const scale = Math.min(width / img.width, height / img.height, 1);
-      const scaledWidth = img.width * scale;
-      const scaledHeight = img.height * scale;
-      const offsetX = (width - scaledWidth) / 2;
-      const offsetY = (height - scaledHeight) / 2;
+      const imageFitMode = MediaProcessor.FIT_MODES.includes(settings.selectedImageFitMode)
+        ? settings.selectedImageFitMode
+        : 'contain';
+      const cropAnchorX = MediaProcessor.ANCHORS_X.includes(settings.cropAnchorX) ? settings.cropAnchorX : 'center';
+      const cropAnchorY = MediaProcessor.ANCHORS_Y.includes(settings.cropAnchorY) ? settings.cropAnchorY : 'center';
+      const allowUpscale = Boolean(settings.allowUpscale);
 
-      ctx.drawImage(img, offsetX, offsetY, scaledWidth, scaledHeight);
+      let cropInfo = null;
+
+      if (imageFitMode === 'stretch') {
+        // Растягиваем на всю рамку: полей и обрезки нет, пропорции не сохраняются.
+        ctx.drawImage(img, 0, 0, width, height);
+      } else if (imageFitMode === 'cover') {
+        // Заполняем рамку без искажения пропорций, лишнее обрезаем со стороны,
+        // противоположной выбранной привязке.
+        const sourceAspect = img.width / img.height;
+        const targetAspect = width / height;
+        let sourceX = 0;
+        let sourceY = 0;
+        let sourceWidth = img.width;
+        let sourceHeight = img.height;
+
+        if (sourceAspect > targetAspect) {
+          // Исходник шире рамки — режем бока.
+          sourceWidth = img.height * targetAspect;
+          const overflow = img.width - sourceWidth;
+          sourceX = cropAnchorX === 'left' ? 0 : cropAnchorX === 'right' ? overflow : overflow / 2;
+          cropInfo = { axis: 'horizontal', anchor: cropAnchorX, percent: +(overflow / img.width * 100).toFixed(1) };
+        } else if (sourceAspect < targetAspect) {
+          // Исходник выше рамки — режем верх/низ.
+          sourceHeight = img.width / targetAspect;
+          const overflow = img.height - sourceHeight;
+          sourceY = cropAnchorY === 'top' ? 0 : cropAnchorY === 'bottom' ? overflow : overflow / 2;
+          cropInfo = { axis: 'vertical', anchor: cropAnchorY, percent: +(overflow / img.height * 100).toFixed(1) };
+        }
+
+        ctx.drawImage(
+          img,
+          sourceX, sourceY, sourceWidth, sourceHeight,
+          0, 0, width, height
+        );
+      } else {
+        // Вписываем целиком и центрируем. Увеличиваем сверх исходного размера
+        // только если это разрешено настройкой — иначе картинки набора выйдут разного размера.
+        const fitScale = Math.min(width / img.width, height / img.height);
+        const scale = allowUpscale ? fitScale : Math.min(fitScale, 1);
+        const scaledWidth = img.width * scale;
+        const scaledHeight = img.height * scale;
+        const offsetX = (width - scaledWidth) / 2;
+        const offsetY = (height - scaledHeight) / 2;
+
+        ctx.drawImage(img, offsetX, offsetY, scaledWidth, scaledHeight);
+      }
 
       const finalName = appState.generateFileName(
         file.customName || file.name.replace(/\.[^/.]+$/, ''),
@@ -285,6 +338,9 @@ export class MediaProcessor {
             compressedSize: blob.size,
             format,
             resolution: `${width}x${height}`,
+            imageFitMode,
+            cropAnchor: imageFitMode === 'cover' ? `${cropAnchorY}/${cropAnchorX}` : null,
+            cropInfo,
             background: settings.selectedBackground,
             backgroundColor
           });

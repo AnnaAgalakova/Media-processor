@@ -144,6 +144,30 @@
     .resolution-option:hover { border-color: #3498db; background: #e3f2fd; }
     .resolution-option.selected { border-color: #27ae60; background: #d4edda; }
 
+    .image-fit-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; margin: 15px 0; }
+    .image-fit-option { position: relative; display: flex; align-items: flex-start; gap: 10px; padding: 14px; border: 2px solid #bdc3c7; border-radius: 10px; cursor: pointer; transition: all 0.25s ease; background: #fff; }
+    .image-fit-option:hover { border-color: #3498db; background: #f0f8ff; transform: translateY(-1px); }
+    .image-fit-option.selected { border-color: #27ae60; background: #e8f5e8; box-shadow: 0 4px 12px rgba(39, 174, 96, 0.14); }
+    .image-fit-option:focus-within { outline: 3px solid rgba(52, 152, 219, 0.25); outline-offset: 2px; }
+    .image-fit-option input { margin-top: 3px; accent-color: #27ae60; }
+    .image-fit-copy { display: flex; flex-direction: column; gap: 3px; }
+    .image-fit-name { font-weight: 600; color: #2c3e50; }
+    .image-fit-description { color: #7f8c8d; font-size: 0.85em; line-height: 1.35; }
+
+    .crop-anchor { margin: -5px 0 15px; padding: 14px; border: 2px dashed #bdc3c7; border-radius: 10px; background: #fbfcfd; }
+    .crop-anchor-title { font-weight: 600; color: #2c3e50; margin-bottom: 10px; }
+    .crop-anchor-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+    .crop-anchor-field { display: flex; flex-direction: column; gap: 5px; font-size: 0.9em; color: #2c3e50; }
+    .crop-anchor-field select { padding: 8px; border: 2px solid #bdc3c7; border-radius: 8px; font-size: 0.95em; background: #fff; cursor: pointer; }
+    .crop-anchor-field select:focus { outline: none; border-color: #3498db; }
+    .crop-anchor-hint { margin-top: 10px; font-size: 0.85em; color: #7f8c8d; line-height: 1.4; }
+
+    .image-upscale { display: flex; align-items: flex-start; gap: 9px; margin: -5px 0 15px; padding: 12px 14px; border: 2px solid #bdc3c7; border-radius: 10px; background: #fff; cursor: pointer; }
+    .image-upscale input { margin-top: 3px; accent-color: #27ae60; }
+    .image-upscale-copy { display: flex; flex-direction: column; gap: 3px; }
+    .image-upscale-name { font-weight: 600; color: #2c3e50; }
+    .image-upscale-description { color: #7f8c8d; font-size: 0.85em; line-height: 1.35; }
+
     .checkbox-controls { display: flex; gap: 10px; margin: 10px 0; flex-wrap: wrap; }
     .checkbox-btn { background: #3498db; color: white; border: none; padding: 6px 12px; border-radius: 5px; cursor: pointer; font-size: 0.8em; transition: background 0.3s ease; }
     .checkbox-btn:hover { background: #2980b9; }
@@ -386,6 +410,65 @@
     <div class="settings-section">
       <h3>📷 Настройки изображений</h3>
       <input type="text" class="size-input" id="imageSizes" value="1200x600, 800x400, 400x200" placeholder="Введите размеры через запятую">
+
+      <div class="image-fit-options" role="radiogroup" aria-label="Размещение изображения в рамке">
+        <label class="image-fit-option selected">
+          <input type="radio" name="imageFitMode" value="contain" checked>
+          <span class="image-fit-copy">
+            <span class="image-fit-name">Вписать целиком</span>
+            <span class="image-fit-description">Сохранить всё изображение. При несовпадении пропорций появятся поля цвета подложки.</span>
+          </span>
+        </label>
+        <label class="image-fit-option">
+          <input type="radio" name="imageFitMode" value="cover">
+          <span class="image-fit-copy">
+            <span class="image-fit-name">Заполнить с обрезкой</span>
+            <span class="image-fit-description">Заполнить рамку без полей. Пропорции сохраняются, лишнее обрезается — можно выбрать, с какой стороны.</span>
+          </span>
+        </label>
+        <label class="image-fit-option">
+          <input type="radio" name="imageFitMode" value="stretch">
+          <span class="image-fit-copy">
+            <span class="image-fit-name">Растянуть</span>
+            <span class="image-fit-description">Заполнить рамку целиком без обрезки. Пропорции не сохраняются — изображение исказится.</span>
+          </span>
+        </label>
+      </div>
+
+      <div class="crop-anchor hidden" id="cropAnchorBlock">
+        <div class="crop-anchor-title">✂️ Что сохранять при обрезке</div>
+        <div class="crop-anchor-row">
+          <label class="crop-anchor-field">
+            По вертикали — когда режется верх и низ
+            <select id="cropAnchorY">
+              <option value="top">Верх (обрезать снизу)</option>
+              <option value="center">По центру (симметрично)</option>
+              <option value="bottom" selected>Низ (обрезать сверху) — не срежет название</option>
+            </select>
+          </label>
+          <label class="crop-anchor-field">
+            По горизонтали — когда режутся бока
+            <select id="cropAnchorX">
+              <option value="left">Слева (обрезать справа)</option>
+              <option value="center" selected>По центру (симметрично)</option>
+              <option value="right">Справа (обрезать слева)</option>
+            </select>
+          </label>
+        </div>
+        <p class="crop-anchor-hint">
+          Работает только для одной оси — той, по которой пропорции не сходятся. Для киноплакатов и обложек
+          обычно нужен вариант «Низ»: сверху чаще всего фон, а снизу название и титры.
+          В этом режиме маленькое изображение будет увеличено до заданного размера — возможна потеря резкости.
+        </p>
+      </div>
+
+      <label class="image-upscale" id="upscaleBlock">
+        <input type="checkbox" id="allowUpscale">
+        <span class="image-upscale-copy">
+          <span class="image-upscale-name">Увеличивать изображения меньше рамки</span>
+          <span class="image-upscale-description">Без галочки маленький исходник останется в своём размере по центру подложки, и картинки в наборе выйдут разного видимого размера. С галочкой все будут вписаны в рамку одинаково, но мелкие потеряют резкость.</span>
+        </span>
+      </label>
 
       <div class="preset-buttons">
         <button class="preset-btn" onclick="appState.loadPreset('creatives')">Креативы</button>
